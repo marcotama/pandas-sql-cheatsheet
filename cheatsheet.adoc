@@ -1,0 +1,329 @@
+:last-update-label!:
+:xrefstyle: short
+:source-highlighter: coderay
+= Pandas-SQL Cheatsheet
+
+//.Table Title
+[cols="a,a"]
+|===
+|Pandas | SQL
+
+2+^|*Create table*
+
+|
+[source,python]
+----
+df_d = pd.DataFrame(columns=[
+    'id',
+    'name',
+])
+df_e = pd.DataFrame(columns=[
+    'id',
+    'first_name',
+    'last_name',
+    'email',
+    'address',
+    'date_hired',
+    'department_id'
+])
+df_d.index = df_d.index.astype(int)
+df_e.index = df_e.index.astype(int)
+df_d["id"] = df_d["id"].astype(int)
+df_e["id"] = df_e["id"].astype(int)
+df_e["department_id"] = df_e["department_id"].astype(int)
+df_e["date_hired"] = pd.to_datetime(df_e["date_hired"])
+----
+
+Note 1: Pandas does not have a “date” type, only datetime; dates can be stored as datetimes with time set to midnight.
+Note 2: Pandas does not provide support for enforcing constraints; however, they can be verified as follows:
+
+* PRIMARY KEY/UNIQUE:
+[source,python]
+----
+len(df_e[field].unique()) == len(df_e[field])
+----
+
+* FOREIGN KEY:
+[source,python]
+----
+df_e['department_id'].isin(df_d['id']).all()
+----
+
+
+
+
+|
+[source,sql]
+----
+CREATE TABLE department (
+  id INT,
+  name varchar(50) NOT NULL,
+  PRIMARY KEY (id)
+);
+CREATE TABLE employees (
+  id INT,
+  first_name varchar(50) NOT NULL,
+  last_name varchar(50) NOT NULL,
+  email VARCHAR (50) UNIQUE NOT NULL,
+  address VARCHAR(255) NOT NULL,
+  date_hired DATE NOT NULL,
+  department_id INT,
+  PRIMARY KEY (id),
+  FOREIGN KEY (department_id) REFERENCES department (id),
+  UNIQUE (address, first_name, last_name)
+);
+----
+
+
+2+^|*View entire table*
+
+|
+[source,python]
+----
+df_e
+----
+
+|
+[source,sql]
+----
+SELECT *
+FROM employee
+----
+
+
+2+^|*View top N rows*
+
+|
+[source,python]
+----
+df_e.head(5)
+----
+
+|
+[source,sql]
+----
+SELECT *
+FROM employee
+LIMIT 5
+----
+
+
+2+^|*Slice table vertically (filter columns)*
+
+|
+[source,python]
+----
+df_e[['first_name', 'last_name']]
+----
+
+|
+[source,sql]
+----
+SELECT first_name, last_name
+FROM employee
+----
+
+
+2+^|*Slice table horizontally (filter rows)*
+
+
+2+^|Simple
+|
+[source,python]
+----
+df_e[df_e['salary'] > 35000]
+----
+
+|
+[source,sql]
+----
+SELECT *
+FROM employee
+WHERE salary > 35000
+----
+
+
+2+^|IN
+|
+[source,python]
+----
+df_e[df_e['city'].isin(['London', 'Manchester']]
+----
+
+|
+[source,sql]
+----
+SELECT *
+FROM employee
+WHERE city IN ('London', 'Manchester')
+----
+
+
+2+^|NOT IN
+|
+[source,python]
+----
+df_e[~df_e['city'].isin(['London', 'Manchester']]
+----
+
+|
+[source,sql]
+----
+SELECT *
+FROM employee
+WHERE city NOT IN ('London', 'Manchester')
+----
+
+2+^|Multiple conditions
+|
+[source,python]
+----
+df_e[(
+    df_e['salary'] > 35000) &\
+    df_e['city'].isin(['London', 'Manchester']
+)]
+----
+
+|
+[source,sql]
+----
+SELECT *
+FROM employee
+WHERE salary > 35000 AND city IN ('London', 'Manchester')
+----
+
+
+2+^|*Slice table horizontally (filter rows)*
+
+|
+[source,python]
+----
+df_e[df_e['salary'] > 35000]
+----
+
+|
+[source,sql]
+----
+SELECT *
+FROM employee
+WHERE salary > 35000
+----
+
+
+2+^|*Slice table both horizontally and vertically*
+
+|
+[source,python]
+----
+df_e[df_e['salary'] > 35000]\
+    [['first_name', 'last_name']]
+
+----
+
+|
+[source,sql]
+----
+SELECT first_name, last_name
+FROM employee
+WHERE salary > 35000
+----
+
+
+2+^|*Join tables*
+
+|
+[source,python]
+----
+df_e.merge(df_d, left_on='department_id', right_on='id', how='left')\
+    [['first_name', 'last_name', 'name']]\
+    .rename(columns={'name': 'department'})
+----
+
+|
+[source,sql]
+----
+SELECT e.first_name, e.last_name, d.name AS department
+FROM employee AS e
+LEFT JOIN department AS d ON e.department_id=d.id
+----
+
+
+2+^|*Group and aggregate*
+
+|
+[source,python]
+----
+df_e.merge(df_d, left_on='department_id', right_on='id', how='left')\
+    .groupby('department_id')\
+    .aggregate({
+            'salary': ['mean', 'median'],
+            'date_hired': ['first']
+    })
+----
+
+|
+[source,sql]
+----
+SELECT MEAN(e.salary) AS mean_salary, MEDIAN(e.salary) AS median_salary, FIRST(e.date_hired) AS first_hire_date, d.name AS department
+FROM employee AS e
+LEFT JOIN department AS d ON e.department_id=d.id
+GROUP BY e.department_id
+----
+
+
+2+^|*Group, aggregate and filter*
+
+|
+[source,python]
+----
+df_e.merge(df_d, left_on='department_id', right_on='id', how='left')\
+    .groupby('department_id')\
+    .filter(lambda sub_df: sub_df['salary'].mean() > 39000)\
+    .groupby('department_id')\
+    .aggregate({
+        'salary': ['mean', 'median'],
+        'date_hired': ['first']
+    })
+----
+
+|
+[source,sql]
+----
+SELECT MEAN(e.salary) AS mean_salary, MEDIAN(e.salary) AS median_salary, FIRST(e.date_hired) AS first_hire_date, d.name AS department
+FROM employee AS e
+LEFT JOIN department AS d ON e.department_id=d.id
+GROUP BY e.department_id
+HAVING mean_salary > 39000
+
+----
+
+
+2+^|*Group, filter, aggregate and filter*
+
+|
+[source,python]
+----
+df_m = df_e.merge(df_d, left_on='department_id', right_on='id', how='left')
+df_m[df_m.apply(lambda df_: df_['city'] == 'London', axis=1)]\
+    .groupby('department_id')\
+    .filter(lambda sub_df: sub_df['salary'].mean() > 39000)\
+    .groupby('department_id')\
+    .aggregate({
+        'salary': ['mean', 'median'],
+        'date_hired': ['first']
+    })
+----
+
+|
+[source,sql]
+----
+SELECT MEAN(e.salary) AS mean_salary, MEDIAN(e.salary) AS median_salary, FIRST(e.date_hired) AS first_hire_date, d.name AS department
+FROM employee AS e
+LEFT JOIN department AS d ON e.department_id=d.id
+WHERE city = 'LONDON'
+GROUP BY e.department_id
+HAVING mean_salary > 39000
+
+----
+
+|===

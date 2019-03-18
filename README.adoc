@@ -1,0 +1,18 @@
+:source-highlighter: coderay
+= Pandas - SQL Cheatsheet
+
+
+Run the following commands to install the tools required to compile the cheatsheet.
+
+[source,bash]
+----
+brew install pandoc
+gem install asciidoctor unicode coderay
+----
+
+To compile the cheatsheet, run the command below.
+
+[source,bash]
+----
+bash compile.sh
+----
